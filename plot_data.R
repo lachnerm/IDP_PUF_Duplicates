@@ -1,0 +1,151 @@
+library(data.table)
+library(ggplot2)
+library(pheatmap)
+library(viridis)
+library(png)
+library(grid)
+library(gridExtra)
+
+data <- fread("results/base/corr.csv")
+idxs_to_remove <- c(0:29,39, 49, 59, 69, 79, 89, 99)
+data[, paste0('V', idxs_to_remove+1) := NULL]
+
+data_mat <- matrix(unlist(data[84]), nrow=7, ncol=9, byrow=T)
+pheatmap(data_mat, cluster_rows = F, cluster_cols = F )
+
+gen_theme <- theme(
+  #text = element_text(family='libertine'),
+  plot.title = element_text(size=30, face="bold", hjust = 0.5, margin=margin(0,0,20,0)),
+  axis.title.x = element_text(size=28, margin=margin(15,0,0,0)),
+  axis.title.y = element_text(size=28, margin=margin(0,15,0,0)),
+  axis.text = element_text(size=30),
+  axis.text.x = element_text(margin=margin(5,0,0,0)),
+  axis.text.y = element_text(margin=margin(0,5,0,0)),
+  axis.ticks = element_line(size = 1.5),
+  panel.grid.major = element_line(size = 1.2), 
+  panel.grid.minor = element_line(size = 1.2), 
+  panel.border = element_rect(colour = "black", fill=NA, size=2),
+  legend.text = element_text(size=20),
+  legend.title = element_text(size=18)
+)
+
+df <- expand.grid(x=1:9, y=1:7)
+df$z = unlist(data[84])
+plot_pc_heat <- ggplot(df, aes(x,y, fill=z)) + 
+  geom_tile() + 
+  scale_fill_viridis(limits=c(0, 1), expand=c(0,0)) + 
+  scale_x_discrete("Horizontal index", limits=0:9, breaks=c(2, 4, 6, 8)) +
+  scale_y_discrete("Vertical index", limits=0:7, breaks=c(2, 4, 6)) +
+  #scale_y_reverse(limits=c(8,0)) +
+  #labs(fill="Pearson \ncorrelation", title="Speckle Pattern Correlation between Structures") +
+  labs(title="Pearson Correlation between Structures") +
+  theme_bw() + 
+  gen_theme + 
+  theme(
+    #legend.key.height = unit(1.7, "cm"),
+    legend.key.height = unit(2.75, "cm"),
+    legend.key.width = unit(1, "cm"),
+    #legend.title.align = 0.5,
+    #legend.title = element_text(size=14, margin=5margin(0,0,10,0)),
+    legend.title = element_blank(),
+    legend.text = element_text(size=25),
+    plot.margin=margin(2,50,2,2)
+  )
+#plot_pc_heat
+#ggsave('pc_heatmap.pdf', device="pdf", plot_pc_heat, width=11, height=8)
+
+data_sample <- data[84]
+data_sample[, idx := .I]
+data_sample <- melt(data_sample, id.vars="idx")
+plot_pc_hist <- ggplot(data_sample[value != 1], aes(value)) + 
+  #geom_histogram(bins=11, color="black", fill="#1EACA8") + 
+  geom_histogram(bins=11, color="black", fill="#FDE725FF") + 
+  labs(title="Distribution of Pearson Correlation", x="Pearson Correlation", y="Number of Structures") +
+  scale_x_continuous(breaks=c(0.6, 0.7, 0.8, 0.9, 1.0), limits=c(0.6, 0.9)) +
+  coord_cartesian(xlim=c(0.6, 0.9)) + 
+  theme_bw() + 
+  gen_theme + 
+  theme(
+    plot.margin=margin(2,2,2,0)
+  )
+#plot_pc_hist
+#ggsave('pc_hist.png', plot_pc_hist, width=12, height=7)
+plt_pc <- grid.arrange(plot_pc_heat, plot_pc_hist, ncol=2)
+ggsave('pc_eval.pdf', device="pdf", plt_pc, width=26, height=8)
+
+plt_pc_hist_density <- plot_pc_hist + geom_density(lwd = 1.2, linetype = 2, alpha=0.5, show.legend = FALSE)
+plt_pc <- grid.arrange(plot_pc_heat, plt_pc_hist_density, ncol=2)
+ggsave('pc_eval_density.pdf', device="pdf", plt_pc, width=26, height=8)
+
+
+data_like <- fread("results/base_rot10/fhd_crop125.csv")
+data_unlike <- fread("results/base_rot10_vs_20160617_carpet_2/fhd_crop125.csv")
+data_like[, paste0('V', idxs_to_remove+1) := NULL]
+
+data_like <- data_like[41]
+#data_like <- data_like[84]
+data_unlike <- data_unlike[41]
+data_like[, Distribution := "Like"]
+data_unlike[, Distribution := "Unlike"]
+data_like <- melt(data_like, id.vars="Distribution")
+data_like <- data_like[value != 0]
+data_unlike <- melt(data_unlike, id.vars="Distribution")
+data_fhd <- rbind(data_unlike, data_like)
+
+plot <- ggplot(data_fhd, aes(value, fill=Distribution)) +
+  geom_histogram(bins=28, color="black", center=0.5) + 
+  labs(
+    title="Like and Unlike Distribution of FHD",
+    x="Fractional Hamming Distance", 
+    y="Number of Structures",
+    fill="Distribution:"
+    ) +
+  theme_bw() + 
+  gen_theme +
+  theme(
+    legend.position = c(0.131, 0.82),
+    legend.background = element_rect(size=0.7, linetype="solid", 
+                                     colour ="darkgrey"),
+    legend.margin=margin(15,25,15,25),
+    legend.text = element_text(size=25),
+    legend.title = element_text(size=25),
+    plot.title = element_text(size=28)
+  ) + 
+  geom_vline(xintercept = 0.41, linetype="dashed", size=1.3, color="slateblue4") +
+  geom_vline(xintercept = 0.411, linetype="dashed", size=1.3, color="slateblue4") +
+  geom_label(x=0.39, y=11.85, label="Decision\nboundary\nfrom [1]", size=8.5,
+             fill ="#d6d3eb", label.padding=unit(0.54, "cm"), label.size = 1.5,  color="slateblue4")  +
+  geom_label(x=0.39, y=11.85, label="Decision\nboundary\nfrom [1]", size=8.5,
+             fill="#d6d3eb", label.size = NA,  color="black")
+
+# color darkorchid3 #beb8e3
+
+plot
+ggsave('fhd_hist.pdf', device="pdf", plot, width=12, height=7)
+plot <- plot + geom_density(lwd = 1.2, linetype = 2, alpha=0.5,  show.legend = FALSE)
+ggsave('fhd_hist_density.pdf', device="pdf", plot, width=12, height=7)
+
+themeddd <- theme_bw() + theme(
+  text = element_text(family='libertine'),
+  strip.text = element_text(size = 12, face="italic"),
+  legend.position="bottom",
+  legend.text = element_text(size=10),
+  legend.title = element_blank(),
+  axis.text = element_text(size=10),
+  axis.title = element_text(size=12),
+  legend.margin=margin(t = -0.4, unit='cm')
+)
+
+par(mfrow=c(1,2)) 
+i1 <- image(z = z <- sin(r^2)*exp(-r/6), col  = gray((0:32)/32))
+i2 <- image(z = z <- cos(r^42)*exp(-r/6), col  = gray((0:32)/32))
+
+img1 <-  rasterGrob(as.raster(readPNG("data/base/struc1.png")), interpolate = FALSE)
+
+r1 <- load.image("data/base/struc1.png")
+
+library(cowplot)
+ggdraw() + 
+  draw_image("data/base/struc84.png", width = 0.47) + 
+  draw_image("data/base/struc91.png", width = 0.47, x = 0.5)
+
